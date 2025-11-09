@@ -25,10 +25,9 @@ RUN addgroup -g 1000 deploy \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 COPY --chown=deploy:deploy --from=deps-composer /tmp/cache /home/deploy/.composer/cache
-COPY . /app
-
-WORKDIR /app
+COPY --chown=deploy:deploy . /app
 
 USER deploy
+WORKDIR /app
 
 CMD  ["php", "-S", "0.0.0.0:1215", "-t", "public"]

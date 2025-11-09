@@ -6,10 +6,10 @@
     },
     "autoload": {
         "files": [
+            "helpers/init_db.php",
             "classes/db.php",
             "helpers/arr_sole_by_key.php",
-            "helpers/decode_anyvalue.php",
-            "helpers/str_replace_sub.php"
+            "helpers/decode_anyvalue.php"
         ]
     }
 }
