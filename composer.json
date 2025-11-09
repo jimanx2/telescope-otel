@@ -1,0 +1,15 @@
+{
+    "require": {
+        "google/protobuf": "^4.33",
+        "open-telemetry/gen-otlp-protobuf": "^1.8",
+        "illuminate/support": "^12.37"
+    },
+    "autoload": {
+        "files": [
+            "classes/db.php",
+            "helpers/arr_sole_by_key.php",
+            "helpers/decode_anyvalue.php",
+            "helpers/str_replace_sub.php"
+        ]
+    }
+}
