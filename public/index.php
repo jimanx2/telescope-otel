@@ -1,6 +1,17 @@
 <?php
 
-// 1. Ensure the autoloader is included from the project root
+// Define your authorized username and password
+define('DASHBOARD_USER', 'admin');
+define('DASHBOARD_PASS', 'securepassword123'); // **CHANGE THIS!**
+
+if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW']) ||
+    $_SERVER['PHP_AUTH_USER'] !== DASHBOARD_USER || $_SERVER['PHP_AUTH_PW'] !== DASHBOARD_PASS) {
+    header('WWW-Authenticate: Basic realm="Debug Dashboard"');
+    header('HTTP/1.0 401 Unauthorized');
+    echo 'Authentication Required.';
+    exit;
+}
+
 require '/app/vendor/autoload.php';
 
 define('DB_DATABASE', '/app/databases/telescope.sqlite');
@@ -8,136 +19,149 @@ define('DB_DATABASE', '/app/databases/telescope.sqlite');
 // Database Configuration
 $db = DB::instance();
 
-// 2. *** CRITICAL UPDATE: USE THE CORRECT NAMESPACE ***
-// The class is under 'Opentelemetry' and includes the 'Collector' path.
-use Opentelemetry\Proto\Collector\Trace\V1\ExportTraceServiceRequest;
+$currentType = $_GET['type'] ?? 'all'; // Used for filtering
+$conditions = $bindings = [];
 
-// --- Remaining receiver logic remains the same ---
-
-// 1. Basic Request Validation (assuming the file is routed to /v1/traces)
-if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !str_ends_with($_SERVER['REQUEST_URI'], '/v1/traces')) {
-    http_response_code(404);
-    echo "Not Found";
-    exit;
+if (isset($_GET['q'])) {
+    $conditions[] = "uuid LIKE ?";
+    $bindings[] = $_GET['q'] . '%';
+} else {
+    $conditions[] = "1=1";
 }
 
-// ... (Content-Type and Raw Body reading logic)
+$sqlCond = implode(" AND ", $conditions);
 
-$contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-if (!str_contains($contentType, 'application/x-protobuf')) {
-    http_response_code(415); // Unsupported Media Type
-    echo "Expected Content-Type: application/x-protobuf";
-    exit;
+// Get counts for the sidebar (e.g., how many requests, queries, etc.)
+$typeCounts = [];
+$countStmt = $db->query("SELECT type, COUNT(*) as count FROM debug_entries WHERE {$sqlCond} GROUP BY type", ...$bindings);
+foreach ($countStmt->fetchAll() as $row) {
+    $typeCounts[$row['type']] = $row['count'];
 }
 
-$rawBody = file_get_contents('php://input');
-if (empty($rawBody)) {
-    http_response_code(400);
-    exit("Bad Request: Empty body");
-}
+$conditions[] = match($currentType) {
+    'all' => '1=1',
+    'request' => "type = 'request'",
+    'client-request' => "type = 'client-request'",
+    'exception' => "type = 'exception'",
+    'log' => "type = 'log'",
+    'query' => "type = 'query'",
+    'unknown' => "type = 'unknown'",
+    default => '0=1'
+};
 
-// 3. Deserialize the Protobuf Payload
-try {
-    // Instantiate the request object using the newly corrected namespace
-    $request = new ExportTraceServiceRequest();
-    
-    // Parse the raw binary string into the Protobuf object
-    $request->mergeFromString($rawBody);
-    
-    // 4. Process the Trace Data (Example: logging span names)
-    $spansCount = 0;
-    foreach ($request->getResourceSpans() as $resourceSpans) {
-        $serviceName = 'unknown'; // Logic to extract service name attribute...
-        foreach ($resourceSpans->getScopeSpans() as $scopeSpans) {
-            foreach ($scopeSpans->getSpans() as $span) {
-                $spansCount++;
+$sqlCond = implode(" AND ", $conditions);
 
-                // Determine span kind
-                $kind = $span->getKind(); // integer
-                $kindStr = match($kind) {
-                    0 => 'UNSPECIFIED',
-                    1 => 'INTERNAL',
-                    2 => 'SERVER',
-                    3 => 'CLIENT',
-                    4 => 'PRODUCER',
-                    5 => 'CONSUMER',
-                    default => 'UNKNOWN',
-                };
-                $debugEntryKind = match($kindStr) {
-                    'SERVER' => 'request',
-                    'CLIENT' => (str_starts_with($span->getName(), 'sql ') ? 'query' : 'client-request'),
-                    default  => 'unknown'
-                };
+// Fetch the latest 50 entries ordered by newest first
+$stmt = $db->query("SELECT uuid, type, content, created_at FROM debug_entries WHERE {$sqlCond} ORDER BY created_at DESC LIMIT 50", ...$bindings);
+$entries = $stmt->fetchAll();
 
-                // Collect span attributes
-                $spanAttrs = [];
-                foreach ($span->getAttributes() as $kv) {
-                    $key = $kv->getKey();
-                    $valObj = $kv->getValue();
-
-                    $spanAttrs[$key] = decode_anyvalue($valObj);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar style for the main content */
+        .content-area::-webkit-scrollbar { width: 4px; }
+        .content-area::-webkit-scrollbar-thumb { background-color: #6366f1; border-radius: 2px; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen antialiased text-gray-800">
+        <div class="flex flex-col w-64 bg-gray-900 text-white p-4">
+            <h1 class="text-2xl font-bold mb-6 text-indigo-400">Debug Dashboard</h1>
+            <ul class="space-y-2">
+                <?php
+                // Function to generate sidebar links
+                function renderSidebarLink($type, $count, $current) {
+                    $isActive = $type == $current ? 'bg-indigo-600' : 'hover:bg-gray-800';
+                    $url = $type === 'all' ? '?' : '?type=' . $type;
+                    $typeDisplay = ucfirst($type);
+                    echo <<<HTML
+                    <li>
+                        <a href="{$url}" class="flex items-center justify-between p-2 rounded-lg {$isActive} transition-colors">
+                            <span>{$typeDisplay}</span>
+                            <span class="px-2 text-xs font-semibold text-gray-100 bg-gray-700 rounded-full">{$count}</span>
+                        </a>
+                    </li>
+                    HTML;
                 }
 
-                $uuid = sprintf("%s-%s", bin2hex($span->getTraceId()), bin2hex($span->getSpanId()));
+                // Render Links
+                $totalCount = array_sum($typeCounts);
+                renderSidebarLink('all', $totalCount, $currentType);
 
-                $content = [];
-
-                if (in_array($debugEntryKind, ['request', 'client-request'])) {
-                    $content = [
-                        'uri' => arr_sole_by_key($spanAttrs, ['http.target', 'http.route']),
-                        'method' => arr_sole_by_key($spanAttrs, ['http.method', 'http.request.method']),
-                        'headers' => arr_sole_by_key($spanAttrs, ['http.request.header'], []),
-                        'payload' => arr_sole_by_key($spanAttrs, ['http.request.body'], null),
-                        'response' => [
-                            'status_code' => arr_sole_by_key($spanAttrs, ['http.status_code', 'http.response.status_code']),
-                            'headers' => arr_sole_by_key($spanAttrs, ['http.response.header'], []),
-                            'content' => arr_sole_by_key($spanAttrs, ['http.response.body'], '...')
-                        ]
-                    ];
+                foreach ($typeCounts as $type => $count) {
+                    renderSidebarLink($type, $count, $currentType);
                 }
+                ?>
+            </ul>
+        </div>
 
-                if (in_array($debugEntryKind, ['unknown'])) {
-                    $content = [
-                        'name' => $span->getName(),
-                        'attributes' => $spanAttrs
-                    ];
-                }
+        <main class="flex-1 overflow-y-auto p-8 content-area">
+            <h2 class="text-3xl font-semibold mb-6 text-gray-700">Recent Entries</h2>
 
-                if (in_array($debugEntryKind, ['query'])) {
-                    $sql = arr_sole_by_key($spanAttrs, ['db.query.text']);
-                    $content = [
-                        'sql' => $sql,
-                        'attributes' => $spanAttrs
-                    ];
-                }
-
-                $db->query(
-                    'INSERT INTO debug_entries (uuid, type, content) VALUES (?, ?, ?)', 
-                    $uuid, // uuid
-                    $debugEntryKind, // type
-                    json_encode($content), // content
-                );
-
-                error_log(sprintf(
-                    "✅ Span %s received: Name='%s', UUID='%s', Attributes=%s",
-                    sprintf('%s:%s', $debugEntryKind, $kindStr),
-                    $span->getName(),
-                    $uuid,
-                    json_encode($spanAttrs)
-                ));
-            }
-        }
-    }
-
-    // 5. Send the OTLP Success Response
-    http_response_code(200);
-    header('Content-Type: application/x-protobuf');
-    echo ""; 
-    error_log("Successfully processed {$spansCount} spans.");
-    
-} catch (\Exception $e) {
-    // This catches protobuf parsing failures
-    http_response_code(400);
-    error_log("Protobuf Deserialization Error: " . $e->getMessage());
-    exit("Failed to parse OTLP Protobuf payload.");
-}
+            <form method="GET" class="mb-4 flex items-center gap-2">
+                <input type="text" name="q" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>"
+                    placeholder="Search by UUID (left%)" 
+                    class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                <button type="submit"
+                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                    Search
+                </button>
+            </form>
+            <div class="bg-white shadow-lg rounded-lg overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-indigo-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">UUID</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <?php foreach ($entries as $entry): ?>
+                        <?php
+                            $data = json_decode($entry['content'], true);
+                            // Simple way to display content based on type
+                            $detail = match ($entry['type']) {
+                                'request' => $data['method'] . ' ' . $data['uri'],
+                                'query' => $data['sql'] . ' (Took: ' . ($data['time'] ?? 'N/A') . 'ms)',
+                                'log' => $data['message'],
+                                'exception' => $data['class'] . ': ' . $data['message'],
+                                'unknown' => $data['name'],
+                                default => 'View Details',
+                            };
+                            $typeClass = match ($entry['type']) {
+                                'request' => 'bg-green-100 text-green-800',
+                                'query' => 'bg-blue-100 text-blue-800',
+                                'log' => 'bg-gray-100 text-gray-800',
+                                'exception' => 'bg-red-100 text-red-800',
+                                default => 'bg-yellow-100 text-yellow-800',
+                            };
+                        ?>
+                        <tr class="hover:bg-indigo-50 transition-colors cursor-pointer" onclick="window.location.href='detail.php?uuid=<?= $entry['uuid'] ?>'">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <?= $typeClass ?>">
+                                    <?= ucfirst($entry['type']) ?>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-900 max-w-lg truncate"><?= htmlspecialchars($detail) ?></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?= date('H:i:s', strtotime($entry['created_at'])) ?></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-400"><?= $entry['uuid'] ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php if (empty($entries)): ?>
+                    <div class="p-6 text-center text-gray-500">No debug entries found. Start collecting data!</div>
+                <?php endif; ?>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

@@ -87,6 +87,7 @@ try {
                         'uri' => arr_sole_by_key($spanAttrs, ['http.target', 'http.route']),
                         'method' => arr_sole_by_key($spanAttrs, ['http.method', 'http.request.method']),
                         'headers' => arr_sole_by_key($spanAttrs, ['http.request.header'], []),
+                        'payload' => arr_sole_by_key($spanAttrs, ['http.request.body'], null),
                         'response' => [
                             'status_code' => arr_sole_by_key($spanAttrs, ['http.status_code', 'http.response.status_code']),
                             'headers' => arr_sole_by_key($spanAttrs, ['http.response.header'], []),
