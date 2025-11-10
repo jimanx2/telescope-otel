@@ -94,15 +94,8 @@ $total = count($entries);
 $fromN = $total ? ($offset + 1) : 0;
 $toN   = min($offset + $per, $total);
 
-// helper to build urls preserving current filters
-function url_with(array $overrides = []) {
-    $q = $_GET;
-    foreach ($overrides as $k => $v) {
-        if ($v === null) { unset($q[$k]); } else { $q[$k] = $v; }
-    }
-    return '?' . http_build_query($q);
-}
-
+parse_str($_SERVER['QUERY_STRING'] ?? '', $params);
+$phpSelf = http_build_query($params);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -122,7 +115,7 @@ function url_with(array $overrides = []) {
         <div class="flex flex-col w-64 bg-gray-900 text-white p-4">
             <h1 class="text-2xl font-bold mt-4 mb-8 text-indigo-400">Debug Dashboard</h1>
             <div class="flex items-center gap-3 mb-4">
-                <form method="GET" class="flex items-center gap-2">
+                <form method="GET" action="<?= $phpSelf ?>" class="flex items-center gap-2">
                     <select name="svc" class="border rounded px-2 py-1 text-sm text-black">
                         <option value="">All services</option>
                         <?php foreach ($services as $name): ?>
@@ -140,9 +133,14 @@ function url_with(array $overrides = []) {
             <ul class="space-y-2 mt-1">
                 <?php
                 // Function to generate sidebar links
-                function renderSidebarLink($type, $count, $current) {
+                function renderSidebarLink($type, $count, $current, $params) {
                     $isActive = $type == $current ? 'bg-indigo-600' : 'hover:bg-gray-800';
-                    $url = $type === 'all' ? '?' : '?type=' . $type;
+
+                    $params = array_merge($params, $type !== 'all' ? ['type' => $type] : []);
+                    if ($type === 'all') {
+                        unset($params['type']);
+                    }
+                    $url = "/?" . http_build_query($params);
                     $typeDisplay = ucfirst($type);
                     echo <<<HTML
                     <li>
@@ -156,10 +154,10 @@ function url_with(array $overrides = []) {
 
                 // Render Links
                 $totalCount = array_sum($typeCounts);
-                renderSidebarLink('all', $totalCount, $currentType);
+                renderSidebarLink('all', $totalCount, $currentType, $params);
 
                 foreach ($typeCounts as $type => $count) {
-                    renderSidebarLink($type, $count, $currentType);
+                    renderSidebarLink($type, $count, $currentType, $params);
                 }
                 ?>
             </ul>
@@ -167,8 +165,11 @@ function url_with(array $overrides = []) {
 
         <main class="flex-1 overflow-y-auto p-8 content-area">
             <h2 class="text-3xl font-semibold mb-6 text-gray-700">Recent Entries: <?= ! empty($svc) ? $svc : "All Services" ?></h2>
-
+            <?php unset($params['q']); $phpSelf = http_build_query($params); ?>
             <form method="GET" class="mb-4 flex items-center gap-2">
+                <?php foreach($params as $k => $v): ?>
+                <input type="hidden" name="<?= $k ?>" value="<?= htmlspecialchars($v) ?>" />
+                <?php endforeach ?>
                 <input type="text" name="q" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>"
                     placeholder="Search by UUID (left%)" 
                     class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400">
