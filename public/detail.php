@@ -73,11 +73,19 @@ $typeClass = match ($entryDetail['type']) {
 };
 
 $typeCounts = [];
+$typeUuids = [];
 $currentType = $_GET['type'] ?? 'all'; // Used for filtering
 $bindings = [explode('-', $selectedUuid)[0] . '%'];
-$countStmt = $db->query("SELECT type, COUNT(*) as count FROM debug_entries WHERE uuid LIKE ? GROUP BY type", ...$bindings);
+$countStmt = $db->query(<<<CTE
+    SELECT type, uuid, COUNT(*) as count 
+    FROM debug_entries 
+    WHERE uuid LIKE ?
+    GROUP BY type
+    ORDER BY created_at
+CTE, ...$bindings);
 foreach ($countStmt->fetchAll() as $row) {
     $typeCounts[$row['type']] = $row['count'];
+    $typeUuids[$row['type']] = $row['uuid'];
 }
 ?>
 <!DOCTYPE html>
@@ -98,9 +106,14 @@ foreach ($countStmt->fetchAll() as $row) {
             <ul class="space-y-2">
                 <?php
                 // Function to generate sidebar links
-                function renderSidebarLink($type, $count, $current, $uuid) {
+                function renderSidebarLink($type, $count, $current, $uuid, $typeUuids) {
                     $isActive = $type == $current ? 'bg-indigo-600' : 'hover:bg-gray-800';
+
                     $url = $type === 'all' ? '/?q='.$uuid : '/?q='. $uuid.'&type=' . $type;
+                    if ($count == 1) {
+                        $url = '/detail.php?uuid='.$typeUuids[$type];
+                    } 
+
                     $typeDisplay = ucfirst($type);
                     echo <<<HTML
                     <li>
@@ -114,7 +127,7 @@ foreach ($countStmt->fetchAll() as $row) {
 
                 // Render Links
                 foreach ($typeCounts as $type => $count) {
-                    renderSidebarLink($type, $count, $currentType, explode('-', $selectedUuid)[0]);
+                    renderSidebarLink($type, $count, $currentType, explode('-', $selectedUuid)[0], $typeUuids);
                 }
                 ?>
             </ul>

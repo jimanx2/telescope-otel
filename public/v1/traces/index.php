@@ -8,6 +8,11 @@ use Opentelemetry\Proto\Trace\V1\Span;
 
 require_once __DIR__ . '/../../../vendor/autoload.php';
 
+define('DB_DATABASE', '/app/databases/telescope.sqlite');
+
+// Database Configuration
+$db = DB::instance();
+
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -43,7 +48,7 @@ try {
     exit;
 }
 
-$pdo = db();
+$pdo = $db->getPdo();
 $now = (new DateTimeImmutable('now'))->format('Y-m-d H:i:s');
 $insert = $pdo->prepare('INSERT OR REPLACE INTO debug_entries (uuid,type,content,created_at) VALUES (:uuid,:type,:content,:created_at)');
 
@@ -90,25 +95,6 @@ foreach ($req->getResourceSpans() as $rs) {
 echo json_encode(['ok' => true, 'inserted' => $inserted]);
 
 // ---------- helpers ----------
-function db(): PDO {
-    $dbDir = '/app/databases';
-    $dbFile = $dbDir . '/telescope.sqlite';
-    if (!is_dir($dbDir)) { @mkdir($dbDir, 0777, true); }
-    $pdo = new PDO('sqlite:' . $dbFile, null, null, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
-    $pdo->exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;');
-    $pdo->exec('CREATE TABLE IF NOT EXISTS debug_entries (
-        uuid TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at DATETIME NOT NULL
-    )');
-    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_entries_type_created ON debug_entries(type, created_at)');
-    return $pdo;
-}
-
 function kv_to_php(\Opentelemetry\Proto\Common\V1\AnyValue $v) {
     if (method_exists($v, 'hasStringValue') && $v->hasStringValue()) return $v->getStringValue();
     if (method_exists($v, 'hasBoolValue')   && $v->hasBoolValue())   return (bool)$v->getBoolValue();

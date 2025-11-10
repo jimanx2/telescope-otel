@@ -19,6 +19,7 @@ define('DB_DATABASE', '/app/databases/telescope.sqlite');
 // Database Configuration
 $db = DB::instance();
 
+// ---- filtering inputs ----
 $currentType = $_GET['type'] ?? 'all'; // Used for filtering
 $conditions = $bindings = [];
 
@@ -31,7 +32,7 @@ if (isset($_GET['q'])) {
 
 $sqlCond = implode(" AND ", $conditions);
 
-// Get counts for the sidebar (e.g., how many requests, queries, etc.)
+// ---- group counts ----
 $typeCounts = [];
 $countStmt = $db->query("SELECT type, COUNT(*) as count FROM debug_entries WHERE {$sqlCond} GROUP BY type", ...$bindings);
 foreach ($countStmt->fetchAll() as $row) {
@@ -51,9 +52,38 @@ $conditions[] = match($currentType) {
 
 $sqlCond = implode(" AND ", $conditions);
 
-// Fetch the latest 50 entries ordered by newest first
-$stmt = $db->query("SELECT uuid, type, content, created_at FROM debug_entries WHERE {$sqlCond} ORDER BY created_at DESC LIMIT 50", ...$bindings);
+// ---- pagination inputs ----
+$page = max(1, (int)($_GET['page'] ?? 1));
+$per  = (int)($_GET['per']  ?? 50);
+$per  = max(10, min($per, 200)); // clamp 10..200
+$offset = ($page - 1) * $per;
+
+$bindings[] = $per;
+$bindings[] = $offset;
+
+$stmt = $db->query(<<<QRY
+    SELECT uuid, type, content, created_at 
+    FROM debug_entries 
+    WHERE {$sqlCond} 
+    ORDER BY created_at DESC
+    LIMIT ? OFFSET ?
+QRY, ...$bindings);
 $entries = $stmt->fetchAll();
+
+$total = count($entries);
+
+// ---- compute page ranges ----
+$fromN = $total ? ($offset + 1) : 0;
+$toN   = min($offset + $per, $total);
+
+// helper to build urls preserving current filters
+function url_with(array $overrides = []) {
+    $q = $_GET;
+    foreach ($overrides as $k => $v) {
+        if ($v === null) { unset($q[$k]); } else { $q[$k] = $v; }
+    }
+    return '?' . http_build_query($q);
+}
 
 ?>
 <!DOCTYPE html>
@@ -162,6 +192,37 @@ $entries = $stmt->fetchAll();
                 <?php if (empty($entries)): ?>
                     <div class="p-6 text-center text-gray-500">No debug entries found. Start collecting data!</div>
                 <?php endif; ?>
+                <?php
+                    $totalPages = $total ? (int)ceil($total / $per) : 1;
+                    $hasPrev = $page > 1;
+                    $hasNext = $page < $totalPages;
+                ?>
+                <div class="px-4 py-3 flex items-center justify-between border-t bg-white">
+                    <div class="text-sm text-gray-600">
+                        Showing <span class="font-medium"><?= $fromN ?></span>–<span class="font-medium"><?= $toN ?></span>
+                        of <span class="font-medium"><?= number_format($total) ?></span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <form method="get" class="hidden md:flex items-center space-x-2">
+                        <?php foreach (['type','q','from','to'] as $p): if(isset($_GET[$p])): ?>
+                            <input type="hidden" name="<?= htmlspecialchars($p) ?>" value="<?= htmlspecialchars($_GET[$p]) ?>">
+                        <?php endif; endforeach; ?>
+                        <label class="text-sm text-gray-600">Per page</label>
+                        <select name="per" class="border rounded px-2 py-1 text-sm" onchange="this.form.submit()">
+                            <?php foreach ([10,25,50,100,200] as $opt): ?>
+                            <option value="<?= $opt ?>" <?= $per===$opt ? 'selected' : '' ?>><?= $opt ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="hidden" name="page" value="1">
+                        </form>
+
+                        <a href="<?= $hasPrev ? url_with(['page'=>$page-1]) : 'javascript:void(0)' ?>"
+                        class="px-3 py-1 rounded border text-sm <?= $hasPrev ? 'hover:bg-gray-50' : 'opacity-40 cursor-not-allowed' ?>">Prev</a>
+                        <span class="text-sm text-gray-600">Page <?= $page ?> / <?= $totalPages ?></span>
+                        <a href="<?= $hasNext ? url_with(['page'=>$page+1]) : 'javascript:void(0)' ?>"
+                        class="px-3 py-1 rounded border text-sm <?= $hasNext ? 'hover:bg-gray-50' : 'opacity-40 cursor-not-allowed' ?>">Next</a>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
