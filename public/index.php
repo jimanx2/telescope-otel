@@ -76,6 +76,13 @@ $per  = (int)($_GET['per']  ?? 50);
 $per  = max(10, min($per, 200)); // clamp 10..200
 $offset = ($page - 1) * $per;
 
+$stmt = $db->query(<<<QRY
+    SELECT COUNT(*) AS count
+    FROM debug_entries 
+    WHERE {$sqlCond} 
+QRY, ...$bindings);
+$total = $stmt->fetch()['count'];
+
 $bindings[] = $per;
 $bindings[] = $offset;
 
@@ -88,14 +95,20 @@ $stmt = $db->query(<<<QRY
 QRY, ...$bindings);
 $entries = $stmt->fetchAll();
 
-$total = count($entries);
-
 // ---- compute page ranges ----
 $fromN = $total ? ($offset + 1) : 0;
 $toN   = min($offset + $per, $total);
 
 parse_str($_SERVER['QUERY_STRING'] ?? '', $params);
 $phpSelf = http_build_query($params);
+
+function url_with($attrs)
+{
+    global $params;
+
+    return "/?" . http_build_query(array_merge($params, $attrs ?? []));
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">

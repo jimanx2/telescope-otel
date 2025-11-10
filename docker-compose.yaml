@@ -1,7 +1,7 @@
 services:
   telescope:
     image: jimanx2/telescope-otel
-    # volumes:
-    #   - ${PWD}:/app
+    volumes:
+      - ${PWD}:/app
     ports:
       - 8215:1215
