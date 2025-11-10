@@ -1,3 +1,4 @@
 /vendor
 /databases
 !/databases/.gitkeep
+/py-telescope-generator/lib

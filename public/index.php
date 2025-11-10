@@ -129,15 +129,17 @@ $entries = $stmt->fetchAll();
                             $data = json_decode($entry['content'], true);
                             // Simple way to display content based on type
                             $detail = match ($entry['type']) {
-                                'request' => $data['method'] . ' ' . $data['uri'],
+                                'request' => $data['method'] . ' ' . $data['target'],
+                                'client-request' => $data['method'] . ' ' . $data['target'],
                                 'query' => $data['sql'] . ' (Took: ' . ($data['time'] ?? 'N/A') . 'ms)',
                                 'log' => $data['message'],
-                                'exception' => $data['class'] . ': ' . $data['message'],
+                                'exception' => $data['exception']['type'] . ': ' . $data['exception']['message'],
                                 'unknown' => $data['name'],
                                 default => 'View Details',
                             };
                             $typeClass = match ($entry['type']) {
                                 'request' => 'bg-green-100 text-green-800',
+                                'client-request' => 'bg-purple-100 text-green-800',
                                 'query' => 'bg-blue-100 text-blue-800',
                                 'log' => 'bg-gray-100 text-gray-800',
                                 'exception' => 'bg-red-100 text-red-800',
