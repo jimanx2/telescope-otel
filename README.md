@@ -40,6 +40,12 @@ Entries will appear as your OTLP exporter starts sending data.
 
 ---
 
+## How does it look?
+
+<img width="1518" height="575" alt="image" src="https://github.com/user-attachments/assets/a97426fc-b865-49a8-a28a-b271244f7b52" />
+<img width="1098" height="567" alt="image" src="https://github.com/user-attachments/assets/36172320-c0be-49c2-81fe-bf1d0268ac4f" />
+
+
 ## ⚙️ Example Exporter Config (OTLP/HTTP)
 
 ### Using OpenTelemetry Collector
