@@ -1,0 +1,3 @@
+/databases/*.sqlite
+/py-telescope-generator
+/vendor

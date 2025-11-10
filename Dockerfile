@@ -23,9 +23,8 @@ ENTRYPOINT ["/sbin/tini", "--"]
 RUN addgroup -g 1000 deploy \
     && adduser -D -G deploy -u 1000 deploy
 
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-COPY --chown=deploy:deploy --from=deps-composer /tmp/cache /home/deploy/.composer/cache
 COPY --chown=deploy:deploy . /app
+COPY --from=deps-composer /var/composer/vendor /app/
 
 USER deploy
 WORKDIR /app
