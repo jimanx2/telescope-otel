@@ -121,10 +121,3 @@ UI files are under `public/`, and handlers for OTLP ingestion are under `public/
 ## 📜 License
 
 MIT License © 2025 JimanX2
-
-```
-
----
-
-Would you like me to make this a bit more *marketing-style* (like a Docker Hub landing page) — with badges, image size info, and a “Why use this?” section? It’d help for public publishing.
-```
