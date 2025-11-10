@@ -19,6 +19,17 @@ define('DB_DATABASE', '/app/databases/telescope.sqlite');
 // Database Configuration
 $db = DB::instance();
 
+// ---- select services ----
+$svcStmt = $db->query("
+  SELECT DISTINCT svc FROM (
+    SELECT json_extract(content, '$.resource.\"service.name\"') AS svc
+    FROM debug_entries
+  )
+  WHERE svc IS NOT NULL AND svc <> ''
+  ORDER BY svc
+");
+$services = array_column($svcStmt->fetchAll(), 'svc');
+
 // ---- filtering inputs ----
 $currentType = $_GET['type'] ?? 'all'; // Used for filtering
 $conditions = $bindings = [];
@@ -49,6 +60,13 @@ $conditions[] = match($currentType) {
     'unknown' => "type = 'unknown'",
     default => '0=1'
 };
+
+// ---- select service ----
+$svc = isset($_GET['svc']) ? trim($_GET['svc']) : '';
+if ($svc !== '') {
+    $conditions[] = "json_extract(content, '$.resource.\"service.name\"') = ?";
+    $bindings[] = $svc;
+}
 
 $sqlCond = implode(" AND ", $conditions);
 
@@ -102,8 +120,24 @@ function url_with(array $overrides = []) {
 <body class="bg-gray-50">
     <div class="flex h-screen antialiased text-gray-800">
         <div class="flex flex-col w-64 bg-gray-900 text-white p-4">
-            <h1 class="text-2xl font-bold mb-6 text-indigo-400">Debug Dashboard</h1>
-            <ul class="space-y-2">
+            <h1 class="text-2xl font-bold mt-4 mb-8 text-indigo-400">Debug Dashboard</h1>
+            <div class="flex items-center gap-3 mb-4">
+                <form method="GET" class="flex items-center gap-2">
+                    <select name="svc" class="border rounded px-2 py-1 text-sm text-black">
+                        <option value="">All services</option>
+                        <?php foreach ($services as $name): ?>
+                        <option value="<?= htmlspecialchars($name) ?>" <?= $svc === $name ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($name) ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit"
+                        class="px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                        Go
+                    </button>
+                </form>
+            </div>
+            <ul class="space-y-2 mt-1">
                 <?php
                 // Function to generate sidebar links
                 function renderSidebarLink($type, $count, $current) {
@@ -132,7 +166,7 @@ function url_with(array $overrides = []) {
         </div>
 
         <main class="flex-1 overflow-y-auto p-8 content-area">
-            <h2 class="text-3xl font-semibold mb-6 text-gray-700">Recent Entries</h2>
+            <h2 class="text-3xl font-semibold mb-6 text-gray-700">Recent Entries: <?= ! empty($svc) ? $svc : "All Services" ?></h2>
 
             <form method="GET" class="mb-4 flex items-center gap-2">
                 <input type="text" name="q" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>"
@@ -183,7 +217,7 @@ function url_with(array $overrides = []) {
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-sm text-gray-900 max-w-lg truncate"><?= htmlspecialchars($detail) ?></td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"><?= date('H:i:s', strtotime($entry['created_at'])) ?></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" title="<?= date('Y-m-d H:i:s', strtotime($entry['created_at'])) ?>"><?= date('H:i:s', strtotime($entry['created_at'])) ?></td>
                             <td class="px-6 py-4 whitespace-nowrap text-xs font-mono text-gray-400"><?= $entry['uuid'] ?></td>
                         </tr>
                         <?php endforeach; ?>
