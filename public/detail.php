@@ -1,8 +1,8 @@
 <?php
 
 // Define your authorized username and password
-define('DASHBOARD_USER', 'admin');
-define('DASHBOARD_PASS', 'securepassword123'); // **CHANGE THIS!**
+define('DASHBOARD_USER', getenv('DASHBOARD_USER') ?: 'admin');
+define('DASHBOARD_PASS', getenv('DASHBOARD_PASS') ?: 'secretpassword123');
 
 if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW']) ||
     $_SERVER['PHP_AUTH_USER'] !== DASHBOARD_USER || $_SERVER['PHP_AUTH_PW'] !== DASHBOARD_PASS) {
@@ -12,7 +12,7 @@ if (!isset($_SERVER['PHP_AUTH_USER']) || !isset($_SERVER['PHP_AUTH_PW']) ||
     exit;
 }
 
-require '/app/vendor/autoload.php';
+require __DIR__.'/../vendor/autoload.php';
 
 define('DB_DATABASE', '/app/databases/telescope.sqlite');
 
