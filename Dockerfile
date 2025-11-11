@@ -24,7 +24,7 @@ RUN addgroup -g 1000 deploy \
     && adduser -D -G deploy -u 1000 deploy
 
 COPY --chown=deploy:deploy . /app
-COPY --from=deps-composer /var/composer/vendor /app/
+COPY --from=deps-composer /var/composer/vendor /app/vendor
 
 USER deploy
 WORKDIR /app

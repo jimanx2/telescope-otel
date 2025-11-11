@@ -189,7 +189,7 @@ function is_rpc(array $attrs): bool { return attrs_has($attrs, ['rpc.system','rp
 function is_messaging(array $attrs): bool { return attrs_has($attrs, ['messaging.system','messaging.destination','messaging.operation']); }
 
 function build_http_payload(string $name, array $attrs): array {
-    return ['name'=>$name,'method'=>first_attr($attrs,['http.method']),'target'=>first_attr($attrs,['http.target','http.route','http.url']),'host'=>first_attr($attrs,['http.host','net.peer.name','server.address']),'status'=>first_attr($attrs,['http.status_code']),'attributes'=>$attrs];
+    return ['name'=>$name,'method'=>first_attr($attrs,['http.method','http.request.method']),'target'=>first_attr($attrs,['http.target','http.route','http.url']),'host'=>first_attr($attrs,['http.host','net.peer.name','server.address']),'status'=>first_attr($attrs,['http.status_code','http.response.status_code']),'attributes'=>$attrs];
 }
 function build_query_payload(string $name, array $attrs): array {
     $statement=first_attr($attrs,['db.statement','db.query.text','db.sql.text','db.query','sql.query.text','sql.query.parameterized','sql.query','sql.text','sql']);
@@ -202,7 +202,7 @@ function build_exception_payload(string $name, array $attrs, array $events, stri
     return ['name'=>$name,'status_code'=>$statusCode,'exception'=>$exc,'attributes'=>$attrs];
 }
 function classify_span(string $name,int $kind,array $attrs,array $events,string $statusCode): array {
-    if($statusCode==='ERROR'||span_has_exception($events,$attrs)) return ['type'=>'exception','content'=>build_exception_payload($name,$attrs,$events,$statusCode)];
+    if(($statusCode==='ERROR'||span_has_exception($events,$attrs))&&$kind!==Span\SpanKind::SPAN_KIND_SERVER) return ['type'=>'exception','content'=>build_exception_payload($name,$attrs,$events,$statusCode)];
     if(is_sql_span($name,$attrs)) return ['type'=>'query','content'=>build_query_payload($name,$attrs)];
     if(is_httpish($attrs)) { if($kind===Span\SpanKind::SPAN_KIND_SERVER) return ['type'=>'request','content'=>build_http_payload($name,$attrs)]; if($kind===Span\SpanKind::SPAN_KIND_CLIENT) return ['type'=>'client-request','content'=>build_http_payload($name,$attrs)]; return ['type'=>'request','content'=>build_http_payload($name,$attrs)]; }
     if(is_rpc($attrs)) return ['type'=>'rpc','content'=>['system'=>first_attr($attrs,['rpc.system']),'service'=>first_attr($attrs,['rpc.service']),'method'=>first_attr($attrs,['rpc.method']),'name'=>$name,'attributes'=>$attrs]];
