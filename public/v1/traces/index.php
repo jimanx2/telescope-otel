@@ -76,7 +76,6 @@ try {
                     $spanKind = (int)($sp['kind'] ?? 1);
                     $status   = status_code_name((int)($sp['status']['code'] ?? 0));
                     $attrs    = kvjson_list_to_assoc(($sp['attributes'] ?? []));                     
-                    $timestamp= get_timestamp($sp['attributes']);
                     $events   = [];
                     foreach (($sp['events'] ?? []) as $ev) {
                         $events[] = [
