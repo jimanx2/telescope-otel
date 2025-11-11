@@ -25,14 +25,12 @@ $ct = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
 $isProto = str_contains($ct, 'application/x-protobuf');
 $isJson  = str_contains($ct, 'application/json');
 
-error_log("ct: " . print_r(compact('ct', 'isProto', 'isJson'), true));
 if (!$isProto && !$isJson) {
     http_response_code(415); echo json_encode(['error'=>'unsupported_media_type']); exit;
 }
 
 $raw = file_get_contents('php://input') ?: '';
 $ce = strtolower($_SERVER['HTTP_CONTENT_ENCODING'] ?? '');
-error_log("ce: " . print_r(compact('ce'), true));
 if ($ce === 'gzip' || $ce === 'x-gzip') {
     $raw = gzdecode($raw);
     if ($raw === false) {
@@ -77,7 +75,8 @@ try {
                     $spanName = (string)($sp['name'] ?? '');
                     $spanKind = (int)($sp['kind'] ?? 1);
                     $status   = status_code_name((int)($sp['status']['code'] ?? 0));
-                    $attrs    = kvjson_list_to_assoc(($sp['attributes'] ?? []));
+                    $attrs    = kvjson_list_to_assoc(($sp['attributes'] ?? []));                     
+                    $timestamp= get_timestamp($sp['attributes']);
                     $events   = [];
                     foreach (($sp['events'] ?? []) as $ev) {
                         $events[] = [

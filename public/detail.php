@@ -19,6 +19,11 @@ define('DB_DATABASE', '/app/databases/telescope.sqlite');
 // Database Configuration
 $db = DB::instance();
 
+$tzPref = $db
+    ->query("SELECT value FROM preferences WHERE identifier_code = 'APP_TIMEZONE'")
+    ->fetch();
+$tzPref = !! $tzPref && ! is_null($tzPref) ? $tzPref['value'] : 'UTC';
+
 // --- Fetch Single Entry ---
 $selectedUuid = $_GET['uuid'] ?? null;
 
@@ -34,33 +39,13 @@ if (!$entryDetail) {
     die("Entry not found.");
 }
 
-// $entryDetail = [
-//     'uuid' => 'ff6034cb-32ef-4335-9274-e28b7ec5238c',
-//     'type' => 'request',
-//     'content' => json_encode([
-//         'uri' => '/api/endpoint',
-//         'method' => 'POST',
-//         'headers' => [
-//             'content-type' => 'application/json',
-//             'x-forwarded-for' => '127.0.0.1',
-//         ],
-//         'payload' => [
-//             '\$raw' => '{"foo":"bar"}',
-//             "foo" => "bar"
-//         ],
-//         'response' => [
-//             'status_code' => 200,
-//             'headers' => [
-//                 'content-type' => 'application/json',
-//                 'content-length' => 64,
-//             ],
-//             'content' => '<HTML Response>'
-//         ]
-//     ]),
-//     'created_at' => date('Y-m-d H:i:s')
-// ];
-
 $data = json_decode($entryDetail['content'], true);
+
+$data['attributes'] = $data['attributes'] + [
+    'app.local_time' => (new DateTime($entryDetail['created_at']))->setTimeZone(new DateTimeZone($tzPref))->format('Y-m-d H:i:s O'),
+    'app.timezone'   => $tzPref
+];
+
 $prettyJson = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
 // Helper function for color coding
@@ -144,10 +129,10 @@ foreach ($countStmt->fetchAll() as $row) {
                         <?= strtoupper($entryDetail['type']) ?>
                     </span>
                     <span class="text-gray-500 text-sm">
-                        **Time:** <?= date('Y-m-d H:i:s', strtotime($entryDetail['created_at'])) ?>
+                        <strong>Time:</strong> <?= $data['attributes']['app.local_time'] ?>
                     </span>
                     <span class="text-gray-500 text-xs font-mono">
-                        **UUID:** <?= $entryDetail['uuid'] ?>
+                        <strong>UUID:</strong> <?= $entryDetail['uuid'] ?>
                     </span>
                 </div>
 
