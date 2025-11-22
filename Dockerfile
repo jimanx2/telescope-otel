@@ -8,7 +8,7 @@ FROM php:8.3-alpine
 RUN apk --virtual .build add build-base php83-dev && \
     pecl install protobuf && \
     apk del .build && \
-
+    #
     apk add tini \
     # gd requirements
     libzip-dev libpng-dev jpeg-dev freetype-dev icu-dev \
@@ -25,6 +25,8 @@ RUN addgroup -g 1000 deploy \
 
 COPY --chown=deploy:deploy . /app
 COPY --from=deps-composer /var/composer/vendor /app/vendor
+
+VOLUME "/app/vendor"
 
 USER deploy
 WORKDIR /app

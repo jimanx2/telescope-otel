@@ -1,5 +1,5 @@
 build: 
-	docker build -t jimanx2/telescope-otel .
+	docker build --no-cache -t jimanx2/telescope-otel .
 
 push:
 	docker push jimanx2/telescope-otel
