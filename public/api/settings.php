@@ -15,27 +15,32 @@ $db = DB::instance();
 $pdo = $db->getPdo();
 $insert = $pdo->prepare(<<<QRY
     INSERT INTO preferences (identifier_code, value, type) VALUES (:code, :value, :type)
-    ON CONFLICT(identifier_code) DO UPDATE SET value = :value
+    ON CONFLICT(identifier_code) DO UPDATE SET value = :value, type = :type
 QRY);
 
 $settingsMap = [
-    'preferredTimezone' => ['APP_TIMEZONE', 'string']
+    'preferredTimezone' => ['APP_TIMEZONE', 'string', fn ($val) => in_array($val, array_values(timezone_identifiers_list()))]
 ];
 
 $settingsVal = array_reduce(array_keys($settingsMap), function($out, $in) use ($settingsMap) {
     if (! array_key_exists($in, $_POST))
         return $out;
  
-    list($idCode, $type) = $settingsMap[$in];
-    $out[$idCode] = [$type, $_POST[$in]];
+    @list($idCode, $type, $validate) = $settingsMap[$in];
+
+    $out[$idCode] = [$type, $_POST[$in], $validate];
     return $out;
 }, []);
 
 try {
     $pdo->beginTransaction();
     foreach($settingsVal as $idCode => $value) {
-        list($type, $value) = $value;
+        list($type, $value, $validate) = $value;
 
+        if (is_callable($validate) && ! $validate->__invoke($value)) {
+            throw new \Exception("Validation error: " . $idCode . "_IS_INVALID");
+        }
+    
         $insert->execute([
             ':code' => $idCode,
             ':value' => $value,
@@ -43,13 +48,23 @@ try {
         ]);
     }
     $pdo->commit();
-    echo json_encode([
+    sendResponse([
         "message" => "Saved!"
     ]);
-} catch(PDOException $e) {
+} catch(PDOException|Exception $e) {
     $pdo->rollback();
     http_response_code(500);
-    echo json_encode([
+    sendResponse([
         "message" => "Error: ".get_class($e)." - ".$e->getMessage()
     ]);
+}
+
+exit;
+
+function sendResponse($responseObject)
+{
+    if (! headers_sent()) {
+        header("Content-Type: application/json");
+    }
+    echo json_encode($responseObject);
 }

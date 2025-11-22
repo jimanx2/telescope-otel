@@ -20,12 +20,17 @@
     $db = DB::instance();
 
     // Timezones 
-    $timezones = timezone_identifiers_list();
-    array_pop($timezones); // removes UTC
+    $timezones = array_filter(
+        timezone_identifiers_list(),
+        fn($tz) => $tz !== 'UTC'
+    );
+    $timezones = array_values($timezones); // reindex array
     $tzPref = $db
         ->query("SELECT value FROM preferences WHERE identifier_code = 'APP_TIMEZONE'")
         ->fetch();
-    $tzPref = !! $tzPref && ! is_null($tzPref) ? $tzPref['value'] : 'UTC';
+    $tzPref = !! $tzPref && ! is_null($tzPref) && (
+      in_array($tzPref['value'], $timezones) || $tzPref['value'] === 'UTC'
+    ) ? $tzPref['value'] : 'UTC';
 
     // ---- select services ----
     $svcStmt = $db->query(<<<QRY
@@ -263,7 +268,7 @@
                 ?>
                 <div class="px-4 py-3 flex items-center justify-between border-t bg-white">
                     <div class="text-sm text-gray-600">
-                        Showing <span class="font-medium"><?php echo $fromN?></span>–<span class="font-medium"><?php echo $toN?></span>
+                        Showing <span class="font-medium"><?php echo htmlentities($fromN) ?></span>–<span class="font-medium"><?php echo htmlentities($toN) ?></span>
                         of <span class="font-medium"><?php echo number_format($total)?></span>
                     </div>
                     <div class="flex items-center space-x-2">
@@ -280,10 +285,10 @@
                         <input type="hidden" name="page" value="1">
                         </form>
 
-                        <a href="<?php echo $hasPrev ? url_with(['page' => $page - 1]) : 'javascript:void(0)'?>"
+                        <a href="<?php echo htmlentities($hasPrev ? url_with(['page' => $page - 1]) : 'javascript:void(0)') ?>"
                         class="px-3 py-1 rounded border text-sm <?php echo $hasPrev ? 'hover:bg-gray-50' : 'opacity-40 cursor-not-allowed'?>">Prev</a>
-                        <span class="text-sm text-gray-600">Page <?php echo $page?> / <?php echo $totalPages?></span>
-                        <a href="<?php echo $hasNext ? url_with(['page' => $page + 1]) : 'javascript:void(0)'?>"
+                        <span class="text-sm text-gray-600">Page <?php echo htmlentities($page) ?> / <?php echo htmlentities($totalPages) ?></span>
+                        <a href="<?php echo htmlentities($hasNext ? url_with(['page' => $page + 1]) : 'javascript:void(0)') ?>"
                         class="px-3 py-1 rounded border text-sm <?php echo $hasNext ? 'hover:bg-gray-50' : 'opacity-40 cursor-not-allowed'?>">Next</a>
                     </div>
                 </div>
@@ -508,7 +513,14 @@
       // refresh: controls.refresh.value || 'off',
     };
 
-    const { status, data } = await fetch('/api/settings.php', {
+    // contemplation: intend to do validation here but 
+    // as a developer, it's expected that valid values
+    // always can be tampered if it's referred from
+    // client-sourced truth (eg: echo $timezonez)
+    //
+    // so, lets do validation in the api instead
+
+    const response = await fetch('/api/settings.php', {
       method: 'POST',
       headers: {
         'content-type': 'application/x-www-form-urlencoded'
@@ -516,15 +528,27 @@
       body: new URLSearchParams(s).toString()
     });
 
-    if (status === 200) {
-      alert('Settings saved successfully. Now reloading page.')
-      window.location.reload()
+    if (response.ok) {
+      return { ok: true };
+    } else {
+      return { ok: false, message: (await response.json()).message };
     }
   }
 
   btnSettings.addEventListener('click', () => { openModal(); }, {passive:true});
   btnClose.addEventListener('click', closeModal, {passive:true});
-  btnSave.addEventListener('click', () => { saveSettings(); closeModal(); }, {passive:true});
+  btnSave.addEventListener('click', async (e) => {
+    const {ok, message } = await saveSettings()
+    if (! ok) {
+      alert(`Settings could not be saved. ${message}`)
+      e.stopPropagation()
+      e.preventDefault()
+      return
+    }
+
+    alert('Settings saved successfully. Now reloading page.')
+    window.location.reload()
+  }, {passive:true});
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
   // ESC to close
