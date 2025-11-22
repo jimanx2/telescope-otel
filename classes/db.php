@@ -21,6 +21,15 @@ class DB {
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
                 SQL
             );
+            $this->pdo->exec(<<<SQL
+                CREATE TABLE IF NOT EXISTS preferences (
+                    identifier_code CHAR(16) PRIMARY KEY,
+                    value VARCHAR(8) DEFAULT NULL,
+                    type CHAR(16) NOT NULL DEFAULT 'string',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                SQL
+            );
             $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_entries_created ON debug_entries(created_at DESC)");
             $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_entries_uuid ON debug_entries(uuid)");
         } catch (\PDOException $e) {
